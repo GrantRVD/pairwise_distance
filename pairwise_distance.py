@@ -16,6 +16,7 @@ def batch_pdist(data_slice):
     return np.sum(np.dot(weights, np.sqrt(np.sum((X - Y)**2, axis=1)))
                   for X, Y, weights in data_slice)
 
+
 def mean_pairwise_distance(X, weights=None, n_jobs=None, axis=0):
     """Function that returns the sum and mean of the pairwise distances of an 2D
     array X.
@@ -32,7 +33,7 @@ def mean_pairwise_distance(X, weights=None, n_jobs=None, axis=0):
     if weights is None:
         weights = np.ones((N,))
     if n_jobs is None:
-        n_jobs = min(mp.cpu_count(),N)
+        n_jobs = min(mp.cpu_count(), N)
 
     # Get the pairs and their weights to calculate the distances without
     # needing the whole of X, split it into roughly equal sub-arrays per cpu:

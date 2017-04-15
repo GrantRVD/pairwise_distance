@@ -77,9 +77,10 @@ def test_mean_pairwise_distance(N=1000):
     # Serial:
     # Comment this out if you use a high N as it will eat RAM!
     t_start_serial = time()
-    weights = np.array([weights[i] * weights[j]
-                       for i in xrange(N - 1) for j in xrange(i + 1, N)])
-    serial_sum = np.dot(weights, pdist(X, 'euclidean'))
+    new_weights = np.array([weights[i] * weights[j]
+                            for i in xrange(N - 1) for j in xrange(i + 1, N)])
+    serial_sum = np.dot(new_weights, pdist(X, 'euclidean'))
+    N = weights.sum()
     serial_mean = serial_sum / (((N - 1)**2 + (N + 1)) / 2 + N)
     t_end_serial = time()
     ##########################################################################
