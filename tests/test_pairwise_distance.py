@@ -1,5 +1,6 @@
 from __future__ import division
 from time import time
+from tempfile import mkstemp
 import multiprocessing as mp
 
 from scipy.spatial.distance import pdist
@@ -13,56 +14,69 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 from pairwise_distance import mean_pairwise_distance
 
 
-def generate_data(N, seed=10):
+def get_data(N, seed=10, save_data=True):
     """ This generates some test data that we can use to test our pairwise-
-    distance functions.
+    distance functions, if the specified data doesn't already exist.
 
     Required arguments:
-    N       -- The number of datapoints in the test data.
+    N           -- The number of datapoints in the test data.
 
     Optional arguments:
-    seed    -- The seed for NumPy's random module.
+    seed        -- The seed for NumPy's random module. (default: 10)
+    save_data   -- Use temp file if False, .csv if True. (default: False)
     """
 
-    # Generate some data:
+    # Simulate some blobby latitude and longitude data.
+    # Feature 1: latitude
+    # Feature 2: longitude
+    # Feature 3: weights (aka counts)
     np.random.seed(seed)
-    n_samples1 = N * 3 // 4  # same as floor(3/4 * N)
-    n_samples2 = N - n_samples1
+    centers = [[0., 0., 0.],
+               [1., 0., 0.],
+               [0.5, np.sqrt(0.75), 0.],
+               [0.5, np.sqrt(0.75), 0.]]
+    cluster_std = [0.3] * len(centers)
+    blobs, _ = make_blobs(n_samples=N,
+                          n_features=3,
+                          centers=centers,
+                          cluster_std=cluster_std)
 
-    # Blob set 1
-    centers1 = [[0., 0.],
-                [1., 0.],
-                [0.5, np.sqrt(0.75)]]
-    cluster_std1 = [0.3] * len(centers1)
-    data, _ = make_blobs(n_samples=n_samples1,
-                         centers=centers1,
-                         cluster_std=cluster_std1)
+    # The weights should be randomly distributed in [0, 10), so let's fix that.
+    blobs[:, 2] = np.random.random_sample((N,)) * 10.
 
-    # Make sure Blob 1 checks out
+    if save_data:
+        f = './test_array.csv'
+    else:
+        _, f = mkstemp(suffix='.csv')
 
-    # Blob set 2
-    centers2 = [[0.5, np.sqrt(0.75)]]
-    cluster_std2 = [0.3] * len(centers2)
-    extra, _ = make_blobs(n_samples=n_samples2,
-                          centers=centers2,
-                          cluster_std=cluster_std2)
+    # 1 meter corresponds to roughly 1e-5 degrees (or ~1e-7 radians) in
+    # latitutde-longitude coordinates, and are always between +/- 180, so we
+    # don't need to save more precision than eight significant figures.
+    # Be careful! This WILL overwrite an existing file if called.
+    np.savetxt(f, blobs, delimiter=',', fmt='%09.5f')
 
-    return np.concatenate((data, extra), axis=0)
+    return f
 
 
-def test_mean_pairwise_distance(N=1000):
+def test_mean_pairwise_distance(N=1000, data_file=None):
     """
     This function computes the pairwise distances on a (small) simulated
     dataset to make sure the distributed function returns the same sum and
     mean for pairwise distances as SciPy's pdist function.
 
     Optional arguments:
-    N -- The number of points to use in the simulated dataset.
+    N           -- The number of points to generate in the simulated dataset.
+                   (default: 1000)
+    data_file   -- The name of the file containing sample data. (default: None)
     """
 
-    # Generate data and some random floats for the weights:
-    X = generate_data(N)
-    weights = np.random.random_sample((N,)) * 10
+    # Get the sample data. If it doesn't exist yet, create some in a temp file.
+    if data_file is None:
+        data_file = get_data(N, save_data=False)
+
+    data = np.loadtxt(data_file, dtype=np.float32, delimiter=',')
+    X, weights = np.array_split(data, indices_or_sections=[2], axis=1)
+    weights = np.squeeze(weights)  # Remove singleton dimension
 
     ##########################################################################
     # Parallel:
@@ -97,6 +111,7 @@ def test_mean_pairwise_distance(N=1000):
     print print_time('serial', t_end_serial - t_start_serial)
     print 'sum = {}'.format(parallel_sum)
     print 'mean = {}'.format(parallel_mean)
+
 
 # This file shouldn't be executed or imported on its own. This __main__ block
 # is so that external tools (e.g. memory_profiler) work correctly:
